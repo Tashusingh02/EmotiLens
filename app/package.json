@@ -1,7 +1,7 @@
 {
-  "name": "ai-mental-health-platform",
+  "name": "emotilens",
   "version": "1.0.0",
-  "description": "AI Mental Health Platform with Hybrid Chat",
+  "description": "EmotiLens with Hybrid Chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

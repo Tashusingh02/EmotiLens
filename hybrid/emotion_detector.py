@@ -1,24 +1,29 @@
 """
-Emotion detector module that loads the fine-tuned DistilBERT model
+Emotion detector module that loads the GoEmotions model
 and provides functionality to detect emotions from text.
+Supports loading a public pretrained model from HuggingFace
+("SamLowe/roberta-base-go_emotions") or local weights if available.
 """
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from datasets import load_dataset
 import torch
 import os
+
+DEFAULT_PRETRAINED_MODEL = "SamLowe/roberta-base-go_emotions"
 
 # Global variables to store loaded model, tokenizer, and label names
 _model = None
 _tokenizer = None
 _label_names = None
 
-def _load_model(model_path="./model"):
+def _load_model(model_path=None):
     """
-    Load the fine-tuned model and tokenizer from disk, and load label names.
+    Load the emotion classification model and tokenizer.
+    If local trained weights exist at model_path or './model', load them;
+    otherwise load the public pretrained GoEmotions model from HuggingFace.
     
     Args:
-        model_path: Path to the directory containing the saved model and tokenizer
+        model_path: Optional path to directory containing saved model and tokenizer
     
     Returns:
         tuple: (model, tokenizer, label_names)
@@ -26,24 +31,38 @@ def _load_model(model_path="./model"):
     global _model, _tokenizer, _label_names
     
     if _model is None or _tokenizer is None:
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(
-                f"Model not found at {model_path}. "
-                "Please run scripts/train.py first to train and save the model."
-            )
+        # Check if a valid local model directory exists
+        if model_path and os.path.isdir(model_path) and any(os.scandir(model_path)):
+            target = model_path
+        elif os.path.isdir("./model") and any(os.scandir("./model")):
+            files = [f.name for f in os.scandir("./model")]
+            if any(f.endswith((".bin", ".safetensors", ".pt")) or f == "config.json" for f in files):
+                target = "./model"
+            else:
+                target = DEFAULT_PRETRAINED_MODEL
+        else:
+            target = DEFAULT_PRETRAINED_MODEL
         
-        _tokenizer = AutoTokenizer.from_pretrained(model_path)
-        _model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        _tokenizer = AutoTokenizer.from_pretrained(target)
+        _model = AutoModelForSequenceClassification.from_pretrained(target)
         _model.eval()  # Set model to evaluation mode
         
         # Move model to GPU if available
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         _model.to(device)
     
-    # Load label names from the go_emotions dataset
+    # Load label names from the model config id2label mapping
     if _label_names is None:
-        dataset = load_dataset("go_emotions", "simplified")
-        _label_names = dataset['train'].features['labels'].feature.names
+        if hasattr(_model.config, "id2label") and _model.config.id2label:
+            _label_names = [_model.config.id2label[i] for i in range(len(_model.config.id2label))]
+        else:
+            _label_names = [
+                "admiration", "amusement", "anger", "annoyance", "approval", "caring",
+                "confusion", "curiosity", "desire", "disappointment", "disapproval",
+                "disgust", "embarrassment", "excitement", "fear", "gratitude", "grief",
+                "joy", "love", "nervousness", "optimism", "pride", "realization",
+                "relief", "remorse", "sadness", "surprise", "neutral"
+            ]
     
     return _model, _tokenizer, _label_names
 

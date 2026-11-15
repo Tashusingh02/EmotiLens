@@ -1,6 +1,6 @@
-# AI Mental Health Platform - Frontend
+# EmotiLens - Frontend
 
-A beautiful, responsive web interface for the AI Mental Health Chat system with emotion-aware responses.
+A beautiful, responsive web interface for the EmotiLens chat system with emotion-aware responses.
 
 ## Features
 

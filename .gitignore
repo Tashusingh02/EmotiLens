@@ -1,37 +1,24 @@
-<<<<<<< Updated upstream
 # Environment variables
-.env
-
-# Python
-=======
-# =========================
-# ENV FILES (VERY IMPORTANT)
-# =========================
 .env
 .env.*
 apikey.txt
 
-# =========================
-# PYTHON
-# =========================
->>>>>>> Stashed changes
+# Python
 __pycache__/
 *.pyc
-
-<<<<<<< Updated upstream
-# Node
-node_modules/
-=======
-# Virtual environment
 venv/
 .venv/
->>>>>>> Stashed changes
 
-# Model files (VERY IMPORTANT)
-model/
+# Node
+node_modules/
+
+# Large model weights (code in model/ is kept)
 *.bin
 *.pt
+*.safetensors
+model/emotion_model/
+*.zip
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.dbarchive (2)/

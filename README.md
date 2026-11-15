@@ -1,4 +1,4 @@
-# AI Mental Health Platform
+# EmotiLens
 
 ## Features
 - Emotion Detection (GoEmotions)

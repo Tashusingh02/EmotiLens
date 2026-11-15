@@ -122,14 +122,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Emotion Detection API",
+    title="EmotiLens",
     lifespan=lifespan,
 )
 
 
 @app.get("/")
 def home():
-    return {"message": "Emotion Detection API is running"}
+    return {"message": "EmotiLens API is running"}
 
 
 from fastapi.middleware.cors import CORSMiddleware

@@ -1,5 +1,7 @@
 // API Configuration
-const FASTAPI_BASE_URL = 'https://glorifier-usual-footless.ngrok-free.dev';
+const FASTAPI_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://glorifier-usual-footless.ngrok-free.dev';
 const PREDICT_ENDPOINT = `${FASTAPI_BASE_URL}/predict`;
 const EXPLAIN_ENDPOINT = `${FASTAPI_BASE_URL}/explain`;
 
@@ -27,6 +29,8 @@ const statusText = document.getElementById('statusText');
 const statusDot = statusIndicator.querySelector('.status-dot');
 const emotionDisplay = document.getElementById('emotionDisplay');
 const charCount = document.getElementById('charCount');
+const crisisBanner = document.getElementById('crisisBanner');
+const closeCrisisBannerBtn = document.getElementById('closeCrisisBanner');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -45,6 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     sendBtn.addEventListener('click', handleSend);
     resetBtn.addEventListener('click', handleReset);
+    if (closeCrisisBannerBtn) {
+        closeCrisisBannerBtn.addEventListener('click', hideCrisisBanner);
+    }
 
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -137,10 +144,15 @@ async function handleSend() {
             throw new Error(data.error);
         }
 
+        // Show prominent warning banner if crisis detected
+        if (data.crisis) {
+            showCrisisBanner();
+        }
+
         // Add assistant response and preserve originating user text for explainability.
         appendToChatHistory('assistant', data.response);
         adviceGiven = true;
-        addMessage('assistant', data.response, data.emotion, message);
+        addMessage('assistant', data.response, data.emotion, message, !!data.crisis);
 
         // Persist most recent signal for the Book page (single-book UI).
         if (Array.isArray(data.important_words)) {
@@ -209,8 +221,23 @@ async function handleReset() {
 
     emotionDisplay.textContent = '';
     updateStatus('ready', 'Ready');
+    hideCrisisBanner();
 
     // No backend reset needed; inference is stateless in FastAPI endpoints.
+}
+
+function showCrisisBanner() {
+    const banner = document.getElementById('crisisBanner');
+    if (banner) {
+        banner.style.display = 'block';
+    }
+}
+
+function hideCrisisBanner() {
+    const banner = document.getElementById('crisisBanner');
+    if (banner) {
+        banner.style.display = 'none';
+    }
 }
 
 // Save messages to localStorage
@@ -225,8 +252,9 @@ function saveMessagesToStorage() {
         const emotion = emotionTag ? emotionTag.textContent.replace('Detected: ', '') : null;
         const sourceText = msg.dataset.sourceText || null;
         const explanationText = msg.querySelector('.explain-result')?.textContent || null;
+        const isCrisis = msg.classList.contains('crisis-alert');
 
-        messages.push({ role, text, emotion, sourceText, explanationText });
+        messages.push({ role, text, emotion, sourceText, explanationText, isCrisis });
     });
 
     localStorage.setItem(`chatMessages_${sessionId}`, JSON.stringify(messages));
@@ -247,9 +275,17 @@ function restoreMessagesFromStorage() {
             }
 
             // Restore all messages
+            let hadCrisis = false;
             messages.forEach(msg => {
-                addMessageToDOM(msg.role, msg.text, msg.emotion, false, msg.sourceText, msg.explanationText); // false = don't save again
+                if (msg.isCrisis) {
+                    hadCrisis = true;
+                }
+                addMessageToDOM(msg.role, msg.text, msg.emotion, false, msg.sourceText, msg.explanationText, !!msg.isCrisis);
             });
+
+            if (hadCrisis) {
+                showCrisisBanner();
+            }
 
             chatHistory = messages
                 .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && typeof msg.text === 'string' && msg.text.trim())
@@ -270,9 +306,9 @@ function restoreMessagesFromStorage() {
 }
 
 // Add message to DOM (internal function)
-function addMessageToDOM(role, text, emotion = null, saveToStorage = true, sourceText = null, explanationText = null) {
+function addMessageToDOM(role, text, emotion = null, saveToStorage = true, sourceText = null, explanationText = null, isCrisis = false) {
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
+    messageDiv.className = `message ${role}${isCrisis ? ' crisis-alert' : ''}`;
     if (sourceText) {
         messageDiv.dataset.messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         messageDiv.dataset.sourceText = sourceText;
@@ -288,6 +324,12 @@ function addMessageToDOM(role, text, emotion = null, saveToStorage = true, sourc
         messageHeader.innerHTML = '<span>You</span>';
     } else {
         messageHeader.innerHTML = '<span>AI Assistant</span>';
+        if (isCrisis) {
+            const crisisTag = document.createElement('span');
+            crisisTag.className = 'crisis-tag';
+            crisisTag.textContent = 'Crisis Support';
+            messageHeader.appendChild(crisisTag);
+        }
         if (emotion) {
             const emotionTag = document.createElement('span');
             emotionTag.className = `emotion-tag emotion-${emotion.toLowerCase()}`;
@@ -344,8 +386,8 @@ function addMessageToDOM(role, text, emotion = null, saveToStorage = true, sourc
 }
 
 // Add Message to Chat (public function)
-function addMessage(role, text, emotion = null, sourceText = null) {
-    addMessageToDOM(role, text, emotion, true, sourceText);
+function addMessage(role, text, emotion = null, sourceText = null, isCrisis = false) {
+    addMessageToDOM(role, text, emotion, true, sourceText, null, isCrisis);
 }
 
 function appendToChatHistory(role, content) {

@@ -157,9 +157,38 @@ app.post('/api/chat', async (req, res) => {
             console.log('Current emotion frequency:', emotionFrequency);
         }
         
-        res.json(result);
+        res.json({
+            ...result,
+            crisis: result.crisis === true
+        });
     } catch (error) {
         console.error('Error in /api/chat:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate response',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/predict', async (req, res) => {
+    try {
+        const { text, message, sessionId = 'default' } = req.body;
+        const userMsg = text || message || '';
+
+        if (!userMsg || userMsg.trim() === '') {
+            return res.status(400).json({ error: 'Text or message is required' });
+        }
+
+        const result = await callHybridChat(sessionId, userMsg, false);
+        res.json({
+            emotion: result.emotion || 'neutral',
+            confidence: 0.95,
+            important_words: [],
+            response: result.response,
+            crisis: result.crisis === true
+        });
+    } catch (error) {
+        console.error('Error in /predict:', error);
         res.status(500).json({ 
             error: 'Failed to generate response',
             details: error.message 

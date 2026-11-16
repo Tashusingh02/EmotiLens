@@ -18,6 +18,8 @@ os.chdir(project_root)
 
 try:
     from hybrid.hybrid_chat import HybridChat
+    from hybrid.emotion_detector import detect_emotion
+    from hybrid.crisis import detect_crisis, CRISIS_SUPPORT_RESPONSE
 except ImportError as e:
     error_result = {
         "error": f"Failed to import hybrid_chat: {str(e)}",
@@ -43,7 +45,34 @@ def main():
     reset = len(sys.argv) > 3 and sys.argv[3].lower() == 'true'
     
     try:
-        # Get or create chat instance
+        # 1. Fast direct crisis check (runs instantly before any model loading or LLM calls)
+        if detect_crisis(message):
+            result = {
+                "response": CRISIS_SUPPORT_RESPONSE,
+                "emotion": "sadness",
+                "sessionId": session_id,
+                "crisis": True
+            }
+            print(json.dumps(result))
+            sys.stdout.flush()
+            return
+
+        # 2. Detect emotion from message
+        emotion = detect_emotion(message)
+
+        # 3. Contextual crisis check using emotion signal
+        if detect_crisis(message, emotion):
+            result = {
+                "response": CRISIS_SUPPORT_RESPONSE,
+                "emotion": emotion,
+                "sessionId": session_id,
+                "crisis": True
+            }
+            print(json.dumps(result))
+            sys.stdout.flush()
+            return
+
+        # 4. Get or create chat instance
         if reset or session_id not in chat_instances:
             chat_instances[session_id] = HybridChat()
             if reset:
@@ -51,14 +80,15 @@ def main():
         
         chat = chat_instances[session_id]
         
-        # Get response
+        # 5. Get response from LLM
         response = chat.detect_and_respond(message)
         emotion = chat.get_current_emotion()
         
         result = {
             "response": response,
             "emotion": emotion,
-            "sessionId": session_id
+            "sessionId": session_id,
+            "crisis": False
         }
         
         print(json.dumps(result))

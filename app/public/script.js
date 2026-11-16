@@ -1,8 +1,23 @@
 // API Configuration
+function getChatEndpoint() {
+    // If the page is served by the Node.js Express server (port 3000), call /api/chat
+    if (window.location.port === '3000') {
+        return '/api/chat';
+    }
+    // If running under FastAPI (port 8000), call /predict
+    if (window.location.port === '8000') {
+        return '/predict';
+    }
+    // Default: try FastAPI on port 8000
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://127.0.0.1:8000/predict';
+    }
+    return 'https://glorifier-usual-footless.ngrok-free.dev/predict';
+}
+
 const FASTAPI_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://127.0.0.1:8000'
     : 'https://glorifier-usual-footless.ngrok-free.dev';
-const PREDICT_ENDPOINT = `${FASTAPI_BASE_URL}/predict`;
 const EXPLAIN_ENDPOINT = `${FASTAPI_BASE_URL}/explain`;
 
 // State
@@ -116,18 +131,46 @@ async function handleSend() {
     let timeoutId = setTimeout(() => controller.abort(), 360000); // 6 minutes
 
     try {
-        const response = await fetch(PREDICT_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                text: message,
-                advice_given: adviceGiven,
-                history: getRecentHistory()
-            }),
-            signal: controller.signal
-        });
+        const primaryEndpoint = getChatEndpoint();
+        const payload = {
+            text: message,
+            message: message,
+            sessionId: sessionId,
+            advice_given: adviceGiven,
+            history: getRecentHistory()
+        };
+
+        let response;
+        try {
+            response = await fetch(primaryEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+        } catch (fetchErr) {
+            // If primary endpoint failed to connect and on port 3000, fallback to port 8000
+            if (primaryEndpoint === '/api/chat') {
+                response = await fetch('http://127.0.0.1:8000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+            } else if (primaryEndpoint.includes(':8000')) {
+                // If port 8000 failed, fallback to Node server /api/chat
+                response = await fetch('http://127.0.0.1:3000/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+            } else {
+                throw fetchErr;
+            }
+        }
 
         if (timeoutId) {
             clearTimeout(timeoutId);
@@ -230,6 +273,7 @@ function showCrisisBanner() {
     const banner = document.getElementById('crisisBanner');
     if (banner) {
         banner.style.display = 'block';
+        banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
 

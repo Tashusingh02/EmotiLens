@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Pop - EmotiLens</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ==========================================
+           Bubble Pop – Game-Specific Styles
+           ========================================== */
+
+        .game-page {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .game-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 960px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem 1.5rem 0;
+        }
+
+        .game-header-card {
+            background: rgba(13, 24, 41, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 1.25rem 1.6rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .game-header-left h1 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.15rem;
+        }
+
+        .game-header-left p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .game-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .pop-counter {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #5eead4;
+            white-space: nowrap;
+        }
+
+        .calm-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            cursor: pointer;
+            user-select: none;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .calm-toggle input {
+            display: none;
+        }
+
+        .toggle-track {
+            width: 42px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 9999px;
+            position: relative;
+            transition: background 0.3s ease, border-color 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .toggle-track::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: #94a3b8;
+            border-radius: 50%;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        .calm-toggle input:checked + .toggle-track {
+            background: rgba(20, 184, 166, 0.25);
+            border-color: rgba(45, 212, 191, 0.5);
+        }
+
+        .calm-toggle input:checked + .toggle-track::after {
+            transform: translateX(18px);
+            background: #14b8a6;
+            box-shadow: 0 0 8px rgba(20, 184, 166, 0.6);
+        }
+
+        /* Play Area */
+        .game-arena {
+            flex: 1;
+            position: relative;
+            background: rgba(13, 24, 41, 0.55);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 22px;
+            overflow: hidden;
+            min-height: 420px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Positive Message Toast */
+        .pop-message {
+            position: absolute;
+            left: 50%;
+            top: 40%;
+            transform: translate(-50%, -50%);
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #ffffff;
+            background: rgba(20, 184, 166, 0.28);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(45, 212, 191, 0.35);
+            border-radius: 14px;
+            padding: 0.65rem 1.4rem;
+            pointer-events: none;
+            opacity: 0;
+            white-space: nowrap;
+            z-index: 10;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .pop-message.show {
+            animation: toastIn 1.6s ease forwards;
+        }
+
+        @keyframes toastIn {
+            0%   { opacity: 0; transform: translate(-50%, -40%) scale(0.85); }
+            15%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            70%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -65%) scale(0.9); }
+        }
+
+        /* Bubble */
+        .bubble {
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            pointer-events: auto;
+            will-change: transform;
+            transition: none;
+            box-shadow: inset -4px -4px 12px rgba(255, 255, 255, 0.18),
+                        inset 4px 4px 14px rgba(0, 0, 0, 0.12),
+                        0 4px 18px rgba(0, 0, 0, 0.15);
+        }
+
+        .bubble::before {
+            content: '';
+            position: absolute;
+            top: 16%;
+            left: 22%;
+            width: 28%;
+            height: 22%;
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: 50%;
+            transform: rotate(-35deg);
+        }
+
+        .bubble.pop {
+            pointer-events: none;
+            animation: popBurst 0.4s ease-out forwards;
+        }
+
+        @keyframes popBurst {
+            0%   { transform: scale(1); opacity: 1; }
+            30%  { transform: scale(1.35); opacity: 0.8; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* Sparkle Particles */
+        .sparkle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            animation: sparkleFly 0.55s ease-out forwards;
+        }
+
+        @keyframes sparkleFly {
+            0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+            100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.2); }
+        }
+
+        /* Reduced-motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            .bubble {
+                transition: bottom 0.05s linear !important;
+            }
+            .bubble.pop {
+                animation-duration: 0.15s;
+            }
+            .sparkle {
+                animation-duration: 0.2s;
+            }
+            .pop-message.show {
+                animation-duration: 0.8s;
+            }
+            @keyframes toastIn {
+                0%   { opacity: 0; }
+                15%  { opacity: 1; }
+                70%  { opacity: 1; }
+                100% { opacity: 0; }
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .game-wrapper {
+                padding: 1rem 0.75rem 0;
+            }
+            .game-header-card {
+                padding: 1rem 1.1rem;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .game-header-left h1 {
+                font-size: 1.15rem;
+            }
+            .pop-counter {
+                font-size: 1rem;
+            }
+            .game-arena {
+                min-height: 350px;
+                border-radius: 16px;
+            }
+            .pop-message {
+                font-size: 0.98rem;
+                padding: 0.55rem 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body class="game-page">
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <svg class="logo-icon-svg" width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="logoGradientGame" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#14b8a6"/>
+                            <stop offset="50%" stop-color="#38bdf8"/>
+                            <stop offset="100%" stop-color="#6366f1"/>
+                        </linearGradient>
+                        <radialGradient id="logoInnerGlowGame" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.35"/>
+                            <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <circle cx="16" cy="16" r="14" stroke="url(#logoGradientGame)" stroke-width="2" fill="url(#logoInnerGlowGame)"/>
+                    <path d="M7 16C9.5 10.5 13 8 16 8C19 8 22.5 10.5 25 16C22.5 21.5 19 24 16 24C13 24 9.5 21.5 7 16Z" stroke="url(#logoGradientGame)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="16" cy="16" r="3.75" fill="url(#logoGradientGame)"/>
+                    <circle cx="17.2" cy="14.8" r="1" fill="#ffffff"/>
+                </svg>
+                <span>EmotiLens</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="/" class="nav-link">Home</a></li>
+                <li><a href="/chat" class="nav-link">Chat</a></li>
+                <li><a href="/book" class="nav-link">Book of the Day</a></li>
+                <li><a href="/exercise" class="nav-link">Exercise of the Day</a></li>
+                <li><a href="/game" class="nav-link active">Bubble Pop</a></li>
+            </ul>
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Game Content -->
+    <div class="game-wrapper">
+        <div class="game-header-card">
+            <div class="game-header-left">
+                <h1>🫧 Bubble Pop</h1>
+                <p>Pop the bubbles. No score to beat, no time limit. Just breathe.</p>
+            </div>
+            <div class="game-controls">
+                <span class="pop-counter" id="popCounter">Bubbles popped: 0</span>
+                <label class="calm-toggle">
+                    <input type="checkbox" id="calmMode">
+                    <span class="toggle-track"></span>
+                    Calm mode
+                </label>
+            </div>
+        </div>
+
+        <div class="game-arena" id="gameArena">
+            <div class="pop-message" id="popMessage"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="main-footer" style="margin-top: 1.5rem;">
+        <div class="footer-content">
+            <p>&copy; 2026 EmotiLens. All rights reserved.</p>
+            <p class="footer-note">EmotiLens is an educational project, not a medical tool or substitute for professional help.</p>
+        </div>
+    </footer>
+
+    <script src="nav.js"></script>
+    <script>
+    (function () {
+        'use strict';
+
+        /* ---- Config ---- */
+        const MESSAGES = [
+            'Nice one!',
+            'Take a deep breath 🌿',
+            "You're doing great",
+            'One small win at a time',
+            'Breathe in… breathe out',
+            'Keep going, gently 💛',
+            'You deserve this break',
+            'Soft pop, soft moment',
+            'Let it go ✨',
+            'Present. Calm. You.'
+        ];
+
+        const PASTEL_COLORS = [
+            'rgba(186, 230, 253, 0.55)',   /* sky-200 */
+            'rgba(196, 181, 253, 0.55)',   /* violet-200 */
+            'rgba(254, 202, 202, 0.5)',    /* rose-200 */
+            'rgba(167, 243, 208, 0.55)',   /* emerald-200 */
+            'rgba(253, 230, 138, 0.5)',    /* amber-200 */
+            'rgba(165, 243, 252, 0.55)',   /* cyan-200 */
+            'rgba(251, 207, 232, 0.5)',    /* pink-200 */
+            'rgba(191, 219, 254, 0.55)',   /* blue-200 */
+        ];
+
+        const SPARKLE_COLORS = [
+            '#a5f3fc', '#c4b5fd', '#fca5a5', '#6ee7b7',
+            '#fde68a', '#fbcfe8', '#bfdbfe', '#86efac'
+        ];
+
+        const NORMAL_SPEED = 0.55;    /* px per frame (~60fps) */
+        const CALM_SPEED   = 0.22;
+        const SPAWN_INTERVAL_NORMAL = 1100;  /* ms between new bubbles */
+        const SPAWN_INTERVAL_CALM   = 1800;
+        const MAX_BUBBLES = 18;
+        const MIN_SIZE = 38;
+        const MAX_SIZE = 72;
+
+        /* ---- State ---- */
+        let popCount = 0;
+        let calmMode = false;
+        let speed = NORMAL_SPEED;
+        let spawnInterval = SPAWN_INTERVAL_NORMAL;
+        let bubbles = [];        /* { el, x, y, size, speed, sway, swayPhase } */
+        let rafId = null;
+        let spawnTimer = null;
+        let lastMsgIdx = -1;
+        let prefersReducedMotion = false;
+
+        /* ---- DOM refs ---- */
+        const arena   = document.getElementById('gameArena');
+        const counter = document.getElementById('popCounter');
+        const msgEl   = document.getElementById('popMessage');
+        const calmCb  = document.getElementById('calmMode');
+
+        /* ---- Reduced-motion detection ---- */
+        const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+        prefersReducedMotion = mql.matches;
+        mql.addEventListener('change', function (e) {
+            prefersReducedMotion = e.matches;
+        });
+
+        /* ---- Helpers ---- */
+        function rand(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function pickMessage() {
+            let idx;
+            do { idx = Math.floor(Math.random() * MESSAGES.length); } while (idx === lastMsgIdx && MESSAGES.length > 1);
+            lastMsgIdx = idx;
+            return MESSAGES[idx];
+        }
+
+        function showMessage(text) {
+            msgEl.textContent = text;
+            msgEl.classList.remove('show');
+            /* Force reflow so animation restarts */
+            void msgEl.offsetWidth;
+            msgEl.classList.add('show');
+        }
+
+        /* ---- Sparkle burst ---- */
+        function spawnSparkles(cx, cy, color) {
+            const count = prefersReducedMotion ? 3 : 6;
+            for (let i = 0; i < count; i++) {
+                const spark = document.createElement('div');
+                spark.className = 'sparkle';
+                const angle = (Math.PI * 2 * i) / count + rand(-0.3, 0.3);
+                const dist = rand(18, 42);
+                spark.style.left = cx + 'px';
+                spark.style.top  = cy + 'px';
+                spark.style.background = SPARKLE_COLORS[Math.floor(rand(0, SPARKLE_COLORS.length))];
+                spark.style.setProperty('--sx', Math.cos(angle) * dist + 'px');
+                spark.style.setProperty('--sy', Math.sin(angle) * dist + 'px');
+                arena.appendChild(spark);
+                spark.addEventListener('animationend', function () { spark.remove(); });
+            }
+        }
+
+        /* ---- Create a bubble ---- */
+        function createBubble() {
+            if (bubbles.length >= MAX_BUBBLES) return;
+
+            const size = rand(MIN_SIZE, MAX_SIZE);
+            const arenaW = arena.clientWidth;
+            const x = rand(size / 2, arenaW - size / 2);
+            const el = document.createElement('div');
+            el.className = 'bubble';
+            el.style.width  = size + 'px';
+            el.style.height = size + 'px';
+            el.style.left   = (x - size / 2) + 'px';
+            el.style.bottom = (-size) + 'px';
+            el.style.background = PASTEL_COLORS[Math.floor(rand(0, PASTEL_COLORS.length))];
+            arena.appendChild(el);
+
+            const bubbleSpeed = speed * rand(0.7, 1.3);
+
+            const b = {
+                el: el,
+                x: x,
+                y: -size,
+                size: size,
+                speed: bubbleSpeed,
+                sway: rand(0.4, 1.2),
+                swayPhase: rand(0, Math.PI * 2),
+                alive: true
+            };
+
+            /* Click / tap handler */
+            function pop(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!b.alive) return;
+                b.alive = false;
+                el.removeEventListener('pointerdown', pop);
+
+                popCount++;
+                counter.textContent = 'Bubbles popped: ' + popCount;
+
+                /* Sparkle at center of bubble */
+                const rect = el.getBoundingClientRect();
+                const arenaRect = arena.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2 - arenaRect.left;
+                const cy = rect.top  + rect.height / 2 - arenaRect.top;
+                spawnSparkles(cx, cy, el.style.background);
+
+                el.classList.add('pop');
+                showMessage(pickMessage());
+
+                el.addEventListener('animationend', function () {
+                    el.remove();
+                    const idx = bubbles.indexOf(b);
+                    if (idx !== -1) bubbles.splice(idx, 1);
+                });
+            }
+
+            el.addEventListener('pointerdown', pop);
+            bubbles.push(b);
+        }
+
+        /* ---- Animation loop ---- */
+        let lastTime = 0;
+
+        function tick(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = Math.min(timestamp - lastTime, 50); /* cap at 50ms */
+            lastTime = timestamp;
+
+            const arenaH = arena.clientHeight;
+            const factor = dt / 16.67; /* normalize to ~60fps */
+
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                const b = bubbles[i];
+                if (!b.alive) continue;
+
+                b.y += b.speed * factor;
+                b.swayPhase += 0.02 * factor;
+
+                const sway = Math.sin(b.swayPhase) * b.sway;
+                b.el.style.bottom = b.y + 'px';
+                b.el.style.transform = 'translateX(' + sway + 'px)';
+
+                /* Off the top? Remove silently */
+                if (b.y > arenaH + b.size) {
+                    b.el.remove();
+                    bubbles.splice(i, 1);
+                }
+            }
+
+            rafId = requestAnimationFrame(tick);
+        }
+
+        /* ---- Spawner ---- */
+        function startSpawner() {
+            clearInterval(spawnTimer);
+            spawnTimer = setInterval(createBubble, spawnInterval);
+        }
+
+        /* ---- Calm Mode Toggle ---- */
+        calmCb.addEventListener('change', function () {
+            calmMode = calmCb.checked;
+            speed = calmMode ? CALM_SPEED : NORMAL_SPEED;
+            spawnInterval = calmMode ? SPAWN_INTERVAL_CALM : SPAWN_INTERVAL_NORMAL;
+
+            /* Update existing bubbles' speed */
+            for (const b of bubbles) {
+                b.speed = speed * rand(0.7, 1.3);
+            }
+
+            startSpawner();
+        });
+
+        /* ---- Boot ---- */
+        /* Seed a few bubbles right away */
+        for (let i = 0; i < 5; i++) {
+            createBubble();
+            /* Spread them vertically so they don't all start at the bottom */
+            const b = bubbles[bubbles.length - 1];
+            if (b) b.y = rand(0, arena.clientHeight * 0.6);
+        }
+
+        startSpawner();
+        rafId = requestAnimationFrame(tick);
+
+        /* Cleanup on page leave */
+        window.addEventListener('beforeunload', function () {
+            cancelAnimationFrame(rafId);
+            clearInterval(spawnTimer);
+        });
+    })();
+    </script>
+</body>
+</html>

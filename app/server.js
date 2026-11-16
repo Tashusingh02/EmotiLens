@@ -362,6 +362,16 @@ app.get('/exercise', (req, res) => {
     });
 });
 
+app.get('/game', (req, res) => {
+    console.log('GET /game requested');
+    res.sendFile(path.resolve(publicPath, 'game.html'), (err) => {
+        if (err) {
+            console.error('Error sending game.html:', err);
+            res.status(404).send('Game page not found');
+        }
+    });
+});
+
 // Static files (CSS, JS, images) - serve after specific routes
 app.use(express.static(publicPath, {
     index: false // Don't serve index.html for directory requests
@@ -375,5 +385,6 @@ app.listen(PORT, () => {
     console.log(`  - http://localhost:${PORT}/chat`);
     console.log(`  - http://localhost:${PORT}/book`);
     console.log(`  - http://localhost:${PORT}/exercise`);
+    console.log(`  - http://localhost:${PORT}/game`);
 });
 

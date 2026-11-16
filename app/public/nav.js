@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
             (currentPath === '/' && linkPath === '/') ||
             (currentPath === '/chat' && linkPath === '/chat') ||
             (currentPath === '/book' && linkPath === '/book') ||
-            (currentPath === '/exercise' && linkPath === '/exercise')) {
+            (currentPath === '/exercise' && linkPath === '/exercise') ||
+            (currentPath === '/game' && linkPath === '/game')) {
             link.classList.add('active');
         } else {
             link.classList.remove('active');

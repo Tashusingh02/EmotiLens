@@ -1,5 +1,5 @@
 """
-Local LLM interface using Ollama with phi3 model.
+Local LLM interface using Ollama with qwen2.5:1.5b model.
 Sends prompts to Ollama and returns responses.
 """
 
@@ -9,7 +9,13 @@ from typing import Optional
 
 # Default Ollama configuration
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "phi3"
+OLLAMA_MODEL = "qwen2.5:1.5b"
+OLLAMA_KEEP_ALIVE = "30m"
+OLLAMA_OPTIONS = {
+    "num_predict": 100,
+    "temperature": 0.6,
+    "num_ctx": 1024,
+}
 
 def generate_response(
     prompt: str,
@@ -17,6 +23,8 @@ def generate_response(
     base_url: str = OLLAMA_BASE_URL,
     stream: bool = False,
     system: Optional[str] = None,
+    keep_alive: str = OLLAMA_KEEP_ALIVE,
+    options: Optional[dict] = None,
     **kwargs
 ) -> str:
     """
@@ -24,10 +32,12 @@ def generate_response(
     
     Args:
         prompt: The user prompt to send to the model
-        model: The model name to use (default: "phi3")
+        model: The model name to use (default: "qwen2.5:1.5b")
         base_url: The base URL for Ollama API (default: "http://localhost:11434")
         stream: Whether to stream the response (default: False)
         system: Optional system prompt to set the assistant's behavior
+        keep_alive: How long the model should remain loaded in memory (default: "30m")
+        options: Runtime inference options (num_predict, temperature, num_ctx, etc.)
         **kwargs: Additional parameters to pass to Ollama API
     
     Returns:
@@ -39,10 +49,16 @@ def generate_response(
     """
     url = f"{base_url}/api/generate"
     
+    opts = {**OLLAMA_OPTIONS}
+    if options:
+        opts.update(options)
+
     payload = {
         "model": model,
         "prompt": prompt,
-        "stream": stream
+        "stream": stream,
+        "keep_alive": keep_alive,
+        "options": opts,
     }
     
     # Add system prompt if provided
@@ -90,6 +106,8 @@ def chat(
     messages: list,
     model: str = OLLAMA_MODEL,
     base_url: str = OLLAMA_BASE_URL,
+    keep_alive: str = OLLAMA_KEEP_ALIVE,
+    options: Optional[dict] = None,
     **kwargs
 ) -> str:
     """
@@ -99,8 +117,10 @@ def chat(
         messages: List of message dictionaries with "role" and "content" keys
                  Example: [{"role": "system", "content": "..."}, 
                            {"role": "user", "content": "..."}]
-        model: The model name to use (default: "phi3")
+        model: The model name to use (default: "qwen2.5:1.5b")
         base_url: The base URL for Ollama API (default: "http://localhost:11434")
+        keep_alive: How long the model should remain loaded in memory (default: "30m")
+        options: Runtime inference options (num_predict, temperature, num_ctx, etc.)
         **kwargs: Additional parameters to pass to Ollama API
     
     Returns:
@@ -108,10 +128,16 @@ def chat(
     """
     url = f"{base_url}/api/chat"
     
+    opts = {**OLLAMA_OPTIONS}
+    if options:
+        opts.update(options)
+
     payload = {
         "model": model,
         "messages": messages,
-        "stream": False
+        "stream": False,
+        "keep_alive": keep_alive,
+        "options": opts,
     }
     
     # Add any additional parameters
@@ -178,5 +204,5 @@ if __name__ == "__main__":
     else:
         print("✗ Ollama is not running or not accessible")
         print("Please start Ollama with: ollama serve")
-        print("Or make sure phi3 model is installed: ollama pull phi3")
+        print("Or make sure qwen2.5:1.5b model is installed: ollama pull qwen2.5:1.5b")
 

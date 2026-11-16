@@ -6,6 +6,7 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 // Middleware
 app.use(cors());
@@ -45,14 +46,14 @@ function getEmotionBucket(emotion) {
 // Helper function to update emotion frequency and most recent emotion
 function updateEmotionFrequency(emotion) {
     const bucket = getEmotionBucket(emotion);
-    
+
     // Update frequency (keeping for potential future use)
     if (emotionFrequency.hasOwnProperty(bucket)) {
         emotionFrequency[bucket]++;
     } else {
         emotionFrequency['neutral']++;
     }
-    
+
     // Update most recent emotion
     mostRecentEmotion = bucket;
     console.log(`Most recent emotion updated to: ${mostRecentEmotion}`);
@@ -67,10 +68,10 @@ function getMostRecentEmotion() {
 function callHybridChat(sessionId, message, isNewChat = false) {
     return new Promise((resolve, reject) => {
         const pythonScript = path.join(__dirname, 'hybrid_chat_api.py');
-        
+
         // Try python3 first, then python
         const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-        
+
         const pythonProcess = spawn(pythonCmd, [
             pythonScript,
             sessionId,
@@ -125,7 +126,7 @@ function callHybridChat(sessionId, message, isNewChat = false) {
         });
 
         pythonProcess.on('error', (error) => {
-            const errorMsg = error.code === 'ENOENT' 
+            const errorMsg = error.code === 'ENOENT'
                 ? `Python not found. Please make sure Python is installed and in your PATH. Tried: ${pythonCmd}`
                 : `Failed to start Python process: ${error.message}`;
             reject(new Error(errorMsg));
@@ -136,62 +137,143 @@ function callHybridChat(sessionId, message, isNewChat = false) {
 // API Routes
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, sessionId = 'default', reset = false } = req.body;
+        const { message, text, sessionId = 'default', reset = false, advice_given = false, history = [] } = req.body;
+        const userMsg = message || text;
 
         // Handle reset requests - don't require a message
-        if (reset || message === 'RESET_CONVERSATION') {
-            const result = await callHybridChat(sessionId, 'Hello', true);
-            return res.json({ ...result, message: 'Conversation reset' });
-        }
+            if (reset || userMsg === 'RESET_CONVERSATION') {
+                return res.json({ response: 'Conversation reset', emotion: 'neutral', sessionId, message: 'Conversation reset', crisis: false });
+            }
 
-        if (!message || message.trim() === '') {
-            return res.status(400).json({ error: 'Message is required' });
-        }
+                if (!userMsg || userMsg.trim() === '') {
+                    return res.status(400).json({ error: 'Message is required' });
+                }
 
-        const result = await callHybridChat(sessionId, message, reset);
-        
-        // Track emotion for book recommendations (only if not a reset)
-        if (result.emotion && !reset) {
-            updateEmotionFrequency(result.emotion);
-            console.log(`Emotion detected: ${result.emotion} -> bucket: ${getEmotionBucket(result.emotion)}`);
-            console.log('Current emotion frequency:', emotionFrequency);
-        }
-        
-        res.json({
-            ...result,
-            crisis: result.crisis === true
+                let result;
+                let usedFastApi = false;
+
+                // 1. Fast path: Forward to the already-running FastAPI server
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 12000); // 15s timeout
+                    const fastApiResponse = await fetch(`${BACKEND_URL}/predict`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: userMsg,
+                            advice_given,
+                            history
+                        }),
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (fastApiResponse.ok) {
+                        const data = await fastApiResponse.json();
+                        result = {
+                            response: data.response,
+                            emotion: data.emotion,
+                            confidence: data.confidence,
+                            important_words: data.important_words || [],
+                            sessionId,
+                            crisis: data.crisis === true
+                        };
+                        usedFastApi = true;
+                    } else {
+                        console.warn(`FastAPI returned HTTP ${fastApiResponse.status}, falling back to Python subprocess.`);
+                    }
+                } catch (fetchErr) {
+                    console.warn(`Could not reach FastAPI at ${BACKEND_URL}/predict (${fetchErr.message}). Falling back to Python subprocess.`);
+                }
+
+                // 2. Fallback path: Old Python subprocess if FastAPI was unreachable
+                if (!usedFastApi) {
+                    result = await callHybridChat(sessionId, userMsg, reset);
+                    result.crisis = result.crisis === true;
+                }
+
+                // Track emotion for book recommendations (only if not a reset)
+                if (result.emotion && !reset) {
+                    updateEmotionFrequency(result.emotion);
+                    console.log(`Emotion detected: ${result.emotion} -> bucket: ${getEmotionBucket(result.emotion)}`);
+                    console.log('Current emotion frequency:', emotionFrequency);
+                }
+
+
+                res.json({
+                    ...result,
+                    crisis: result.crisis === true
+                });
+            } catch (error) {
+                console.error('Error in /api/chat:', error);
+                res.status(500).json({
+                    error: 'Failed to generate response',
+                    details: error.message
+                });
+            }
         });
-    } catch (error) {
-        console.error('Error in /api/chat:', error);
-        res.status(500).json({ 
-            error: 'Failed to generate response',
-            details: error.message 
-        });
-    }
-});
 
 app.post('/predict', async (req, res) => {
     try {
-        const { text, message, sessionId = 'default' } = req.body;
+        const { text, message, sessionId = 'default', advice_given = false, history = [] } = req.body;
         const userMsg = text || message || '';
 
         if (!userMsg || userMsg.trim() === '') {
             return res.status(400).json({ error: 'Text or message is required' });
         }
 
-        const result = await callHybridChat(sessionId, userMsg, false);
+        let result;
+        let usedFastApi = false;
+
+        // Try forwarding to FastAPI
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const fastApiResponse = await fetch(`${BACKEND_URL}/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: userMsg,
+                    advice_given,
+                    history
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (fastApiResponse.ok) {
+                const data = await fastApiResponse.json();
+                result = {
+                    response: data.response,
+                    emotion: data.emotion,
+                    confidence: data.confidence,
+                    important_words: data.important_words || [],
+                    sessionId,
+                    crisis: data.crisis === true
+                };
+                usedFastApi = true;
+            }
+        } catch (e) {
+            // Fallback
+        }
+
+        if (!usedFastApi) {
+            result = await callHybridChat(sessionId, userMsg, false);
+            result.crisis = result.crisis === true;
+        }
+
         res.json({
             emotion: result.emotion || 'neutral',
-            confidence: 0.95,
-            important_words: [],
+            confidence: result.confidence || 0.95,
+            important_words: result.important_words || [],
             response: result.response,
             crisis: result.crisis === true
         });
     } catch (error) {
         console.error('Error in /predict:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to generate response',
-            details: error.message 
+            details: error.message
         });
     }
 });
@@ -199,7 +281,7 @@ app.post('/predict', async (req, res) => {
 app.post('/api/reset', async (req, res) => {
     try {
         const { sessionId = 'default', resetEmotionTracking = false } = req.body;
-        
+
         // Optionally reset emotion tracking (default: keep it)
         if (resetEmotionTracking) {
             Object.keys(emotionFrequency).forEach(key => {
@@ -207,10 +289,10 @@ app.post('/api/reset', async (req, res) => {
             });
             console.log('Emotion tracking reset');
         }
-        
+
         // Reset is handled by passing reset=true to chat endpoint
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: 'Chat reset',
             emotionTrackingReset: resetEmotionTracking
         });
@@ -287,7 +369,7 @@ app.use(express.static(publicPath, {
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`Make sure Ollama is running and phi3 model is installed`);
+    console.log(`Make sure Ollama is running and qwen2.5:1.5b model is installed`);
     console.log(`Routes available:`);
     console.log(`  - http://localhost:${PORT}/`);
     console.log(`  - http://localhost:${PORT}/chat`);

@@ -20,12 +20,12 @@ class HybridChat:
     to generate contextually appropriate responses.
     """
     
-    def __init__(self, model: str = "phi3", base_url: str = "http://localhost:11434"):
+    def __init__(self, model: str = "qwen2.5:1.5b", base_url: str = "http://localhost:11434"):
         """
         Initialize the hybrid chat system.
         
         Args:
-            model: The Ollama model to use (default: "phi3")
+            model: The Ollama model to use (default: "qwen2.5:1.5b")
             base_url: The base URL for Ollama API (default: "http://localhost:11434")
         """
         self.model = model
@@ -155,14 +155,14 @@ class HybridChat:
         return self.current_emotion
 
 
-def chat_with_emotion(user_message: str, model: str = "phi3", base_url: str = "http://localhost:11434") -> str:
+def chat_with_emotion(user_message: str, model: str = "qwen2.5:1.5b", base_url: str = "http://localhost:11434") -> str:
     """
     Simple function to get an emotion-aware response for a single message.
     Creates a new chat instance for each call (no conversation history).
     
     Args:
         user_message: The user's message text
-        model: The Ollama model to use (default: "phi3")
+        model: The Ollama model to use (default: "qwen2.5:1.5b")
         base_url: The base URL for Ollama API (default: "http://localhost:11434")
     
     Returns:
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         print(f"Error: {e}")
         print("\nPlease make sure:")
         print("1. Ollama is running: ollama serve")
-        print("2. phi3 model is installed: ollama pull phi3")
+        print("2. qwen2.5:1.5b model is installed: ollama pull qwen2.5:1.5b")
     except Exception as e:
         print(f"Error: {e}")
 

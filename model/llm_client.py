@@ -123,9 +123,8 @@ def generate_support_response(
     history: Optional[List[Any]] = None,
 ) -> str:
     """
-    Generate an empathetic support response using local Ollama (phi3),
-    reusing prompt styles from hybrid.style_prompts and falling back gracefully
-    if Ollama is not running.
+    Generate an empathetic support response using local Ollama (qwen2.5:1.5b),
+    using a concise system prompt and falling back gracefully if Ollama is not running.
     
     Args:
         text: User's latest input text.
@@ -137,31 +136,43 @@ def generate_support_response(
         str: Conversational assistant response.
     """
     bucket = get_emotion_bucket(label_name)
-    system_prompt = get_system_prompt(label_name)
-    
-    if advice_given:
-        system_prompt += (
-            "\nNote: The user has already received coping advice earlier in this session. "
-            "Focus on supportive listening and open-ended empathy rather than repeating structured advice."
-        )
 
-    formatted_user_message = format_user_prompt(label_name, text)
+    # Concise ~60-word system prompt tailored to the detected emotion
+    system_prompt = (
+        f"You are EmotiLens, a compassionate mental health companion. "
+        f"The user is feeling {label_name}. "
+        f"Reply warmly, empathetically, and constructively in 2 to 3 short sentences. "
+        f"Acknowledge their emotional state with genuine care, keep your tone supportive and human, "
+        f"and gently encourage them without being overly clinical or repetitive."
+    )
+    if advice_given:
+        system_prompt += " Keep focus on gentle listening rather than repeating advice."
 
     # Format messages for the Ollama chat interface
     messages = [{"role": "system", "content": system_prompt}]
 
-    if history:
-        for item in history:
-            role = getattr(item, "role", None) or (item.get("role") if isinstance(item, dict) else None)
-            content = getattr(item, "content", None) or (item.get("content") if isinstance(item, dict) else None)
-            if role and content:
-                messages.append({"role": role, "content": content})
+    # Send only the last 2 chat turns as history to keep inference fast
+    recent_history = history[-2:] if history else []
+    for item in recent_history:
+        role = getattr(item, "role", None) or (item.get("role") if isinstance(item, dict) else None)
+        content = getattr(item, "content", None) or (item.get("content") if isinstance(item, dict) else None)
+        if role and content:
+            messages.append({"role": role, "content": content})
 
-    messages.append({"role": "user", "content": formatted_user_message})
+    messages.append({"role": "user", "content": text})
 
-    # Attempt to query Ollama via hybrid.local_llm
+    # Attempt to query Ollama via hybrid.local_llm with speed optimizations
     try:
-        response = chat(messages)
+        response = chat(
+            messages,
+            model="qwen2.5:1.5b",
+            keep_alive="30m",
+            options={
+                "num_predict": 100,
+                "temperature": 0.6,
+                "num_ctx": 1024,
+            }
+        )
         if response and response.strip():
             return response.strip()
     except Exception:

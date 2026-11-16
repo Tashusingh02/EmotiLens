@@ -187,9 +187,11 @@ async function handleSend() {
             throw new Error(data.error);
         }
 
-        // Show prominent warning banner if crisis detected
+        // Show warning banner if crisis is true, or hide it if crisis is false
         if (data.crisis) {
             showCrisisBanner();
+        } else {
+            hideCrisisBanner();
         }
 
         // Add assistant response and preserve originating user text for explainability.

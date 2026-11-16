@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -148,9 +149,15 @@ from hybrid.crisis import detect_crisis, CRISIS_SUPPORT_RESPONSE
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
+    t_start = time.perf_counter()
+
     # 1. Fast direct crisis check (runs instantly before any model inference or LLM calls)
     if detect_crisis(body.text):
+        t0 = time.perf_counter()
         important_words = get_top_words(body.text, top_k=3)
+        t_shap = time.perf_counter() - t0
+        t_total = time.perf_counter() - t_start
+        print(f"[Timing] Emotion model: 0.000s (skipped) | SHAP: {t_shap:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
         return PredictResponse(
             emotion="sadness",
             confidence=1.0,
@@ -159,11 +166,18 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
             crisis=True,
         )
 
+    t_emo_start = time.perf_counter()
     label_id, label_name, probability = predict_emotion(body.text)
+    t_emotion = time.perf_counter() - t_emo_start
+
+    t_shap_start = time.perf_counter()
     important_words = get_top_words(body.text, top_k=3, label_id=label_id)
+    t_shap = time.perf_counter() - t_shap_start
 
     # 2. Contextual crisis check using detected emotion signal
     if detect_crisis(body.text, label_name):
+        t_total = time.perf_counter() - t_start
+        print(f"[Timing] Emotion model: {t_emotion:.3f}s | SHAP: {t_shap:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
         return PredictResponse(
             emotion=label_name,
             confidence=round(float(probability), 4),
@@ -172,12 +186,18 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
             crisis=True,
         )
 
+    t_llm_start = time.perf_counter()
     user_response = generate_support_response(
         body.text,
         label_name,
         body.advice_given,
         body.history,
     )
+    t_llm = time.perf_counter() - t_llm_start
+    t_total = time.perf_counter() - t_start
+
+    print(f"[Timing] Emotion model: {t_emotion:.3f}s | SHAP: {t_shap:.3f}s | LLM: {t_llm:.3f}s | Total: {t_total:.3f}s")
+
     return PredictResponse(
         emotion=label_name,
         confidence=round(float(probability), 4),

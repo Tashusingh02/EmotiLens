@@ -33,8 +33,8 @@ pip install -r requirements.txt
 # Start Ollama server
 ollama serve
 
-# Make sure phi3 model is installed
-ollama pull phi3
+# Make sure qwen2.5:1.5b model is installed
+ollama pull qwen2.5:1.5b
 ```
 
 ### 4. Start the Server
@@ -75,13 +75,13 @@ app/
 
 - **Backend**: Node.js, Express
 - **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
-- **AI**: Python, Transformers, Ollama (phi3)
+- **AI**: Python, Transformers, Ollama (qwen2.5:1.5b)
 - **Styling**: Custom CSS with modern design patterns
 
 ## Notes
 
 - The system requires Ollama to be running locally
-- The phi3 model must be installed in Ollama
+- The qwen2.5:1.5b model must be installed in Ollama
 - The DistilBERT emotion detection model must be trained (run `scripts/train.py`)
 
 

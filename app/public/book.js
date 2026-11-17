@@ -5,8 +5,7 @@ let currentImportantWords = [];
 let currentBookData = null;
 
 const PLACEHOLDER_IMAGE = 'placeholder-image-url-1.jpg'; // keeps existing displayBook fallback behavior
-const FASTAPI_BASE_URL = 'http://127.0.0.1:8000';
-const RECOMMEND_BOOK_ENDPOINT = `${FASTAPI_BASE_URL}/recommend-book`;
+const RECOMMEND_BOOK_ENDPOINT = '/api/recommend-book';
 
 // Fetch the most recent emotion from the API
 async function fetchMostRecentEmotion() {

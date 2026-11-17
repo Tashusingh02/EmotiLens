@@ -141,77 +141,77 @@ app.post('/api/chat', async (req, res) => {
         const userMsg = message || text;
 
         // Handle reset requests - don't require a message
-            if (reset || userMsg === 'RESET_CONVERSATION') {
-                return res.json({ response: 'Conversation reset', emotion: 'neutral', sessionId, message: 'Conversation reset', crisis: false });
+        if (reset || userMsg === 'RESET_CONVERSATION') {
+            return res.json({ response: 'Conversation reset', emotion: 'neutral', sessionId, message: 'Conversation reset', crisis: false });
+        }
+
+        if (!userMsg || userMsg.trim() === '') {
+            return res.status(400).json({ error: 'Message is required' });
+        }
+
+        let result;
+        let usedFastApi = false;
+
+        // 1. Fast path: Forward to the already-running FastAPI server
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000); // 15s timeout
+            const fastApiResponse = await fetch(`${BACKEND_URL}/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: userMsg,
+                    advice_given,
+                    history
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (fastApiResponse.ok) {
+                const data = await fastApiResponse.json();
+                result = {
+                    response: data.response,
+                    emotion: data.emotion,
+                    confidence: data.confidence,
+                    important_words: data.important_words || [],
+                    sessionId,
+                    crisis: data.crisis === true
+                };
+                usedFastApi = true;
+            } else {
+                console.warn(`FastAPI returned HTTP ${fastApiResponse.status}, falling back to Python subprocess.`);
             }
+        } catch (fetchErr) {
+            console.warn(`Could not reach FastAPI at ${BACKEND_URL}/predict (${fetchErr.message}). Falling back to Python subprocess.`);
+        }
 
-                if (!userMsg || userMsg.trim() === '') {
-                    return res.status(400).json({ error: 'Message is required' });
-                }
+        // 2. Fallback path: Old Python subprocess if FastAPI was unreachable
+        if (!usedFastApi) {
+            result = await callHybridChat(sessionId, userMsg, reset);
+            result.crisis = result.crisis === true;
+        }
 
-                let result;
-                let usedFastApi = false;
-
-                // 1. Fast path: Forward to the already-running FastAPI server
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 12000); // 15s timeout
-                    const fastApiResponse = await fetch(`${BACKEND_URL}/predict`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            text: userMsg,
-                            advice_given,
-                            history
-                        }),
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
-
-                    if (fastApiResponse.ok) {
-                        const data = await fastApiResponse.json();
-                        result = {
-                            response: data.response,
-                            emotion: data.emotion,
-                            confidence: data.confidence,
-                            important_words: data.important_words || [],
-                            sessionId,
-                            crisis: data.crisis === true
-                        };
-                        usedFastApi = true;
-                    } else {
-                        console.warn(`FastAPI returned HTTP ${fastApiResponse.status}, falling back to Python subprocess.`);
-                    }
-                } catch (fetchErr) {
-                    console.warn(`Could not reach FastAPI at ${BACKEND_URL}/predict (${fetchErr.message}). Falling back to Python subprocess.`);
-                }
-
-                // 2. Fallback path: Old Python subprocess if FastAPI was unreachable
-                if (!usedFastApi) {
-                    result = await callHybridChat(sessionId, userMsg, reset);
-                    result.crisis = result.crisis === true;
-                }
-
-                // Track emotion for book recommendations (only if not a reset)
-                if (result.emotion && !reset) {
-                    updateEmotionFrequency(result.emotion);
-                    console.log(`Emotion detected: ${result.emotion} -> bucket: ${getEmotionBucket(result.emotion)}`);
-                    console.log('Current emotion frequency:', emotionFrequency);
-                }
+        // Track emotion for book recommendations (only if not a reset)
+        if (result.emotion && !reset) {
+            updateEmotionFrequency(result.emotion);
+            console.log(`Emotion detected: ${result.emotion} -> bucket: ${getEmotionBucket(result.emotion)}`);
+            console.log('Current emotion frequency:', emotionFrequency);
+        }
 
 
-                res.json({
-                    ...result,
-                    crisis: result.crisis === true
-                });
-            } catch (error) {
-                console.error('Error in /api/chat:', error);
-                res.status(500).json({
-                    error: 'Failed to generate response',
-                    details: error.message
-                });
-            }
+        res.json({
+            ...result,
+            crisis: result.crisis === true
         });
+    } catch (error) {
+        console.error('Error in /api/chat:', error);
+        res.status(500).json({
+            error: 'Failed to generate response',
+            details: error.message
+        });
+    }
+});
 
 app.post('/predict', async (req, res) => {
     try {
@@ -323,6 +323,38 @@ app.post('/api/emotion/reset', (req, res) => {
         emotionFrequency[key] = 0;
     });
     res.json({ success: true, message: 'Emotion tracking reset' });
+});
+
+// Proxy: Book recommendation → FastAPI /recommend-book
+app.post('/api/recommend-book', async (req, res) => {
+    try {
+        const fastApiResponse = await fetch(`${BACKEND_URL}/recommend-book`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        const data = await fastApiResponse.json();
+        res.status(fastApiResponse.status).json(data);
+    } catch (err) {
+        console.error('Error proxying /api/recommend-book:', err.message);
+        res.status(502).json({ error: 'Book recommendation service unavailable', details: err.message });
+    }
+});
+
+// Proxy: SHAP explanation → FastAPI /explain
+app.post('/api/explain', async (req, res) => {
+    try {
+        const fastApiResponse = await fetch(`${BACKEND_URL}/explain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        const data = await fastApiResponse.json();
+        res.status(fastApiResponse.status).json(data);
+    } catch (err) {
+        console.error('Error proxying /api/explain:', err.message);
+        res.status(502).json({ error: 'Explanation service unavailable', details: err.message });
+    }
 });
 
 // Serve frontend pages - MUST be before static middleware

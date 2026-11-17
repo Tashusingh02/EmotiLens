@@ -13,10 +13,11 @@ from dotenv import load_dotenv
 
 from model.llm_client import generate_support_response, suggest_single_book
 from model.predict import load_model, predict_emotion
-from model.shap_explainer import (
-    ensure_shap_explainer,
+from model.explain import (
+    ensure_explainer,
     generate_deterministic_explanation,
     get_top_words,
+    get_top_words_with_scores,
 )
 
 # Load environment variables from .env (if present) once on startup.
@@ -119,7 +120,7 @@ def _is_seen_title(title: str, seen_titles: list[str]) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_model()
-    ensure_shap_explainer()
+    ensure_explainer()
     yield
 
 
@@ -155,9 +156,9 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
     if detect_crisis(body.text):
         t0 = time.perf_counter()
         important_words = get_top_words(body.text, top_k=3)
-        t_shap = time.perf_counter() - t0
+        t_explain = time.perf_counter() - t0
         t_total = time.perf_counter() - t_start
-        print(f"[Timing] Emotion model: 0.000s (skipped) | SHAP: {t_shap:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
+        print(f"[Timing] Emotion model: 0.000s (skipped) | Explain: {t_explain:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
         return PredictResponse(
             emotion="sadness",
             confidence=1.0,
@@ -170,14 +171,15 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
     label_id, label_name, probability = predict_emotion(body.text)
     t_emotion = time.perf_counter() - t_emo_start
 
-    t_shap_start = time.perf_counter()
-    important_words = get_top_words(body.text, top_k=3, label_id=label_id)
-    t_shap = time.perf_counter() - t_shap_start
+    t_explain_start = time.perf_counter()
+    scored_words = get_top_words_with_scores(body.text, top_k=3, label_id=label_id)
+    important_words = [w for w, _ in scored_words]
+    t_explain = time.perf_counter() - t_explain_start
 
     # 2. Contextual crisis check using detected emotion signal
     if detect_crisis(body.text, label_name):
         t_total = time.perf_counter() - t_start
-        print(f"[Timing] Emotion model: {t_emotion:.3f}s | SHAP: {t_shap:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
+        print(f"[Timing] Emotion model: {t_emotion:.3f}s | Explain: {t_explain:.3f}s | LLM: 0.000s (skipped) | Total: {t_total:.3f}s")
         return PredictResponse(
             emotion=label_name,
             confidence=round(float(probability), 4),
@@ -196,7 +198,7 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
     t_llm = time.perf_counter() - t_llm_start
     t_total = time.perf_counter() - t_start
 
-    print(f"[Timing] Emotion model: {t_emotion:.3f}s | SHAP: {t_shap:.3f}s | LLM: {t_llm:.3f}s | Total: {t_total:.3f}s")
+    print(f"[Timing] Emotion model: {t_emotion:.3f}s | Explain: {t_explain:.3f}s | LLM: {t_llm:.3f}s | Total: {t_total:.3f}s")
 
     return PredictResponse(
         emotion=label_name,
@@ -210,8 +212,9 @@ def predict_emotion_endpoint(body: TextInput) -> PredictResponse:
 @app.post("/explain", response_model=ExplainResponse)
 def explain_emotion_endpoint(body: TextInput) -> ExplainResponse:
     label_id, label_name, _probability = predict_emotion(body.text)
-    important_words = get_top_words(body.text, top_k=3, label_id=label_id)
-    explanation = generate_deterministic_explanation(label_name, important_words)
+    scored_words = get_top_words_with_scores(body.text, top_k=3, label_id=label_id)
+    important_words = [w for w, _ in scored_words]
+    explanation = generate_deterministic_explanation(label_name, scored_words)
     return ExplainResponse(
         explanation=explanation,
         important_words=important_words,

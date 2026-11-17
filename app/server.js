@@ -341,7 +341,7 @@ app.post('/api/recommend-book', async (req, res) => {
     }
 });
 
-// Proxy: SHAP explanation → FastAPI /explain
+// Proxy: Occlusion explanation → FastAPI /explain
 app.post('/api/explain', async (req, res) => {
     try {
         const fastApiResponse = await fetch(`${BACKEND_URL}/explain`, {

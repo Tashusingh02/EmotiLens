@@ -43,8 +43,12 @@ def _load_model(model_path=None):
         else:
             target = DEFAULT_PRETRAINED_MODEL
         
-        _tokenizer = AutoTokenizer.from_pretrained(target)
-        _model = AutoModelForSequenceClassification.from_pretrained(target)
+        try:
+            _tokenizer = AutoTokenizer.from_pretrained(target, local_files_only=True)
+            _model = AutoModelForSequenceClassification.from_pretrained(target, local_files_only=True)
+        except Exception:
+            _tokenizer = AutoTokenizer.from_pretrained(target)
+            _model = AutoModelForSequenceClassification.from_pretrained(target)
         _model.eval()  # Set model to evaluation mode
         
         # Move model to GPU if available

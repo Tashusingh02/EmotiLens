@@ -359,15 +359,16 @@ function addMessageToDOM(role, text, emotion = null, saveToStorage = true, sourc
         const explainBtn = document.createElement('button');
         explainBtn.className = explanationText ? 'explain-btn explain-btn--done' : 'explain-btn';
         explainBtn.type = 'button';
-        explainBtn.textContent = explanationText ? 'Explained' : 'Technical explanation';
-        explainBtn.setAttribute('aria-label', 'Show technical explanation for this reply');
+        explainBtn.textContent = explanationText ? 'Explained' : 'Words that most affected this prediction (occlusion analysis)';
+        explainBtn.setAttribute('aria-label', 'Words that most affected this prediction (occlusion analysis)');
+        explainBtn.title = 'Words that most affected this prediction (occlusion analysis)';
         explainBtn.disabled = !!explanationText;
         explainBtn.addEventListener('click', () => handleExplainClick(messageDiv, explainBtn));
 
         const explainResult = document.createElement('div');
         explainResult.className = 'explain-result';
         if (explanationText) {
-            explainResult.textContent = explanationText;
+            explainResult.textContent = explanationText.trim() || 'No single word dominated this prediction.';
         }
 
         explainWrap.appendChild(explainBtn);
@@ -522,7 +523,10 @@ async function handleExplainClick(messageDiv, explainBtn) {
         }
 
         const data = await response.json();
-        explainResult.textContent = data.explanation || 'No explanation available.';
+        const finalExplanation = (data.explanation && data.explanation.trim())
+            ? data.explanation.trim()
+            : 'No single word dominated this prediction.';
+        explainResult.textContent = finalExplanation;
         explainBtn.textContent = 'Explained';
         explainBtn.disabled = true;
         explainBtn.classList.add('explain-btn--done');
@@ -530,7 +534,7 @@ async function handleExplainClick(messageDiv, explainBtn) {
     } catch (error) {
         console.error('Explain error:', error);
         explainBtn.disabled = false;
-        explainBtn.textContent = 'Technical explanation';
+        explainBtn.textContent = 'Words that most affected this prediction (occlusion analysis)';
         explainResult.textContent = 'Failed to load explanation. Please try again.';
     } finally {
         explainRequests.delete(explainKey);
